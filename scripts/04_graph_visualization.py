@@ -54,7 +54,7 @@ def load_data():
     edges_df    = pd.read_csv(EDGES_PATH)
     comments_df = pd.read_csv(COMMENTS_PATH)
 
-    # Fix video_type values in BOTH dataframes
+    
     replace_map = {"ProAI": "Pro-AI", "Anti AI": "Anti-AI"}
     for df in [edges_df, comments_df]:
         if "video_type" in df.columns:
@@ -131,15 +131,21 @@ def sentiment_map(comments_df):
 #figure 1: global topology stats comparison
 
 def fig1_global_topology(G_proai, G_anti):
+    print("→ Fig 1: Global Topology …")
+ 
     s_pro  = graph_stats(G_proai)
     s_anti = graph_stats(G_anti)
-    
-    # Split into two groups: large values and small values
+ 
     large_metrics = ["Nodes", "Edges", "Largest Component"]
     small_metrics = ["Density (×10⁻³)", "Avg Degree", "Max Degree", "Components"]
-    
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    
+ 
+    fig = plt.figure(figsize=(14, 7))
+    from matplotlib.gridspec import GridSpec
+    gs = GridSpec(2, 2, figure=fig, height_ratios=[3, 1], hspace=0.55, wspace=0.35)
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[1, :])   # full width info panel
+ 
     for ax, metrics in [(ax1, large_metrics), (ax2, small_metrics)]:
         x     = np.arange(len(metrics))
         width = 0.35
@@ -155,15 +161,39 @@ def fig1_global_topology(G_proai, G_anti):
         ax.set_xticks(x)
         ax.set_xticklabels(metrics, fontsize=9)
         ax.set_ylabel("Value")
-        ax.legend(framealpha=0.9)
+        ax.legend(framealpha=0.9, fontsize=8)
         ax.set_axisbelow(True)
-    
-    fig.suptitle("Fig 1: Global Network Topology — Pro-AI vs Anti-AI",
-                 fontweight="bold", fontsize=13)
-    plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig1_global_topology.png"
+ 
+    # network construction metadata panel
+    ax3.axis("off")
+    info_lines = [
+        ("Nodes",  "YouTube users who posted or received at least one reply"),
+        ("Edges",  "Directed reply interactions  (User A replied to User B)"),
+        ("Type",   "Directed (DiGraph): reply direction is meaningful for information flow analysis"),
+        ("Weight", "Unweighted: edge presence captures interaction structure; frequency not required for topology"),
+        ("Filter", "Thread level balanced sampling, isolated nodes retained, no degree threshold applied"),
+        ("Data",   f"From : network_edges_balanced.csv , {s_pro['Edges']+s_anti['Edges']:,} total edges  , {s_pro['Nodes']+s_anti['Nodes']:,} unique users across both subgraphs"),
+    ]
+    col_x = [0.01, 0.11]
+    row_y = np.linspace(0.82, 0.08, len(info_lines))
+ 
+    ax3.add_patch(plt.Rectangle((0, 0), 1, 1, transform=ax3.transAxes,
+                                 facecolor="#f4f7fb", zorder=0))
+    ax3.text(0.5, 0.96, "Network Construction Summary",
+             ha="center", va="top", fontsize=9, fontweight="bold",
+             transform=ax3.transAxes, color="#2E4057")
+    for (label, desc), y in zip(info_lines, row_y):
+        ax3.text(col_x[0], y, f"{label}:", fontsize=8, fontweight="bold",
+                 transform=ax3.transAxes, color="#333", va="center")
+        ax3.text(col_x[1], y, desc, fontsize=8,
+                 transform=ax3.transAxes, color="#555", va="center")
+ 
+    fig.suptitle("Fig 1: Global Network Topology: Pro-AI vs Anti-AI",
+                 fontweight="bold", fontsize=13, y=0.99)
+    out = OUTPUT_DIR / "fig1_global_topology.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
+    print(f"   Saved {out.name}")
     
 # degree distribution plots (log-log) for both subgraphs, with power-law fit lines
 
@@ -200,7 +230,7 @@ def fig2_degree_distribution(G_proai, G_anti):
 
     fig.suptitle("Fig 2: Log-Log Degree Distributions", fontsize=14, fontweight="bold", y=1.02)
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig2_degree_distribution.png"
+    out = OUTPUT_DIR / "fig2_degree_distribution.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
@@ -209,7 +239,7 @@ def fig2_degree_distribution(G_proai, G_anti):
 # community detection and composition analysis: greedy modularity communities on the full graph, then composition of top communities by node type
 
 def fig3_community_composition(G_full, ntype_map):
-    print("→ Fig 3: Community Composition …")
+    print("Fig 3: Community Composition …")
 
     UG = G_full.to_undirected()
     communities = list(nx_community.greedy_modularity_communities(UG))
@@ -239,13 +269,13 @@ def fig3_community_composition(G_full, ntype_map):
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_ylabel("Node Composition (%)")
-    ax.set_title("Fig 3: Community Composition — Top Communities by Node Type",
+    ax.set_title("Fig 3: Community Composition: Top Communities by Node Type",
                  fontweight="bold", pad=12)
     ax.legend(loc="upper right", framealpha=0.9)
     ax.set_ylim(0, 110)
     ax.set_axisbelow(True)
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig3_community_composition.png"
+    out = OUTPUT_DIR / "fig3_community_composition.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
@@ -254,29 +284,67 @@ def fig3_community_composition(G_full, ntype_map):
 # top hub nodes by in-degree, coloured by type (Pro-AI / Anti-AI / Mixed)
 
 def fig4_top_hubs(G_full, ntype_map):
-    print("→ Fig 4: Top Hub Nodes …")
-
-    in_deg = dict(G_full.in_degree())
-    top20  = sorted(in_deg, key=in_deg.get, reverse=True)[:20]
-    vals   = [in_deg[n] for n in top20]
-    colors = [{"Pro-AI": C_PROAI, "Anti-AI": C_ANTIAI, "Mixed": C_MIXED}
-              .get(ntype_map.get(n, "Anti-AI"), C_ANTIAI) for n in top20]
-    labels = [f"User {i+1}" for i in range(20)]   # anonymised
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.barh(labels[::-1], vals[::-1], color=colors[::-1], edgecolor="white")
-
+    print("→ Fig 4: Top Hub Nodes")
+ 
+    in_deg  = dict(G_full.in_degree())
+    out_deg = dict(G_full.out_degree())
+    top20   = sorted(in_deg, key=in_deg.get, reverse=True)[:20]
+    vals      = [in_deg[n]  for n in top20]
+    out_vals  = [out_deg[n] for n in top20]
+    colors    = [{"Pro-AI": C_PROAI, "Anti-AI": C_ANTIAI, "Mixed": C_MIXED}
+                 .get(ntype_map.get(n, "Anti-AI"), C_ANTIAI) for n in top20]
+    labels    = [f"User {i+1}" for i in range(20)]
+ 
     legend_patches = [
         mpatches.Patch(color=C_PROAI,  label="Pro-AI community"),
         mpatches.Patch(color=C_ANTIAI, label="Anti-AI community"),
         mpatches.Patch(color=C_MIXED,  label="Mixed / cross-community"),
     ]
-    ax.legend(handles=legend_patches, loc="lower right", framealpha=0.9)
-    ax.set_xlabel("In-Degree (replies received)")
-    ax.set_title("Fig 4: Top 20 Hub Nodes by In-Degree", fontweight="bold", pad=12)
-    ax.set_axisbelow(True)
+ 
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6),
+                                    gridspec_kw={"width_ratios": [2, 1]})
+ 
+    # left: top 20 hubs by in-degree
+    ax1.barh(labels[::-1], vals[::-1], color=colors[::-1], edgecolor="white")
+    ax1.legend(handles=legend_patches, loc="lower right", framealpha=0.9, fontsize=8)
+    ax1.set_xlabel("In-Degree (replies received)")
+    ax1.set_title("(a) Top 20 Hubs by In-Degree", fontweight="bold")
+    ax1.set_axisbelow(True)
+ 
+    #right: in-degree vs out-degree — broadcaster vs engager roles ─────────
+    scatter_colors = [{"Pro-AI": C_PROAI, "Anti-AI": C_ANTIAI, "Mixed": C_MIXED}
+                       .get(ntype_map.get(n, "Anti-AI"), C_ANTIAI) for n in top20]
+    ax2.scatter(out_vals, vals, c=scatter_colors, s=65, alpha=0.85,
+                edgecolors="white", linewidths=0.5)
+    for x, y, lbl in zip(out_vals, vals, labels):
+        ax2.annotate(lbl, (x, y), fontsize=6, ha="left", va="bottom",
+                     xytext=(3, 2), textcoords="offset points", color="#444")
+ 
+    med_in  = np.median(vals)
+    med_out = np.median(out_vals)
+    ax2.axhline(med_in,  color="#aaa", linewidth=0.8, linestyle="--")
+    ax2.axvline(med_out, color="#aaa", linewidth=0.8, linestyle="--")
+ 
+    # quadrant labels
+    xlim = ax2.get_xlim()
+    ylim = ax2.get_ylim()
+    ax2.text(med_out * 0.1 if med_out > 0 else xlim[0] + 0.5,
+             med_in  * 1.02,
+             "Broadcaster\n(high in, low out)", fontsize=7, color="#666", va="bottom")
+    ax2.text(med_out * 1.1 if med_out > 0 else xlim[0] + 0.5,
+             med_in  * 0.15,
+             "Engager\n(low in, high out)",    fontsize=7, color="#666", va="bottom")
+ 
+    ax2.set_xlabel("Out-Degree (replies sent)")
+    ax2.set_ylabel("In-Degree (replies received)")
+    ax2.set_title("(b) User Role: Broadcaster vs Engager", fontweight="bold")
+    ax2.legend(handles=legend_patches, fontsize=7, framealpha=0.9)
+    ax2.set_axisbelow(True)
+ 
+    fig.suptitle("Fig 4: Top 20 Hub Nodes: In-Degree & User Role Analysis",
+                 fontweight="bold", fontsize=13)
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig4_top_hubs.png"
+    out = OUTPUT_DIR / "fig4_top_hubs.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
@@ -284,7 +352,7 @@ def fig4_top_hubs(G_full, ntype_map):
 
 # sample of the network visualised with spring layout, nodes coloured by type and sized by degree
 def fig5_network_sample(G_full, ntype_map):
-    print("→ Fig 5: Network Sample Visualisation …")
+    print("→ Fig 5: Network Sample Visualisation")
 
     # keep only the giant component, then sample 400 nodes
     UG    = G_full.to_undirected()
@@ -319,12 +387,12 @@ def fig5_network_sample(G_full, ntype_map):
     ]
     ax.legend(handles=legend_patches, loc="upper left",
               framealpha=0.95, fontsize=10)
-    ax.set_title("Fig 5: Reply Interaction Network (sampled, n=400)\n"
+    ax.set_title("Fig 5: Reply Interaction Network\n"
                  "Node size ∝ degree; colour = community type",
                  fontweight="bold", pad=12)
     ax.axis("off")
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig5_network_sample.png"
+    out = OUTPUT_DIR / "fig5_network_sample.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
@@ -332,7 +400,7 @@ def fig5_network_sample(G_full, ntype_map):
 
 # synthesis section: centrality vs sentiment scatter, hub sentiment heatmap, cross-group bridge users
 def fig6_centrality_vs_sentiment(G_full, ntype_map, sent_map):
-    print("→ Fig 6: Centrality vs Sentiment Scatter …")
+    print("→ Fig 6: Centrality vs Sentiment Scatter")
 
     in_deg  = dict(G_full.in_degree())
     nodes   = [n for n in G_full.nodes() if n in sent_map and in_deg[n] > 0]
@@ -369,13 +437,13 @@ def fig6_centrality_vs_sentiment(G_full, ntype_map, sent_map):
     ax.legend(handles=legend_patches + handles, labels=["Pro-AI","Anti-AI","Mixed"] + lbs,
               fontsize=8, framealpha=0.9)
 
-    ax.set_xlabel("In-Degree Centrality (replies received)")
+    ax.set_xlabel("In-Degree Centrality (Replies Received)")
     ax.set_ylabel("Mean VADER Compound Score")
     ax.set_title("Fig 6: Centrality vs Mean Sentiment by Community Type",
                  fontweight="bold", pad=12)
     ax.set_axisbelow(True)
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig6_centrality_vs_sentiment.png"
+    out = OUTPUT_DIR / "fig6_centrality_vs_sentiment.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
@@ -416,7 +484,7 @@ def fig7_hub_sentiment_heatmap(G_full, ntype_map, sent_map):
     ax_bar.set_yticks(range(len(labels)))
     ax_bar.set_yticklabels(labels, fontsize=8)
     ax_bar.set_xlabel("Mean VADER Compound Score")
-    ax_bar.set_title("Fig 7: Hub Node Sentiment (Top 30 by In-Degree, sorted by sentiment)",
+    ax_bar.set_title("Fig 7: Hub Node Sentiment (Top 30 by In Degree, Sorted by Sentiment)",
                      fontweight="bold", pad=12)
     ax_bar.set_axisbelow(True)
 
@@ -436,7 +504,7 @@ def fig7_hub_sentiment_heatmap(G_full, ntype_map, sent_map):
     ax_heat.set_xlabel("← More Negative          More Positive →", fontsize=8)
 
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig7_hub_sentiment_heatmap.png"
+    out = OUTPUT_DIR / "fig7_hub_sentiment_heatmap.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
@@ -444,7 +512,7 @@ def fig7_hub_sentiment_heatmap(G_full, ntype_map, sent_map):
 #cross-group bridge users: identify top 20 "Mixed" nodes by in-degree, show their sentiment and number of interactions with each community (Pro-AI vs Anti-AI), visualised as a combined bar + scatter plot
 
 def fig8_cross_group_bridges(G_full, ntype_map, sent_map, edges_df):
-    print("→ Fig 8: Cross-Group Bridge Users …")
+    print("→ Fig 8: Cross-Group Bridge Users")
 
     mixed_nodes = [n for n, t in ntype_map.items() if t == "Mixed" and n in sent_map]
 
@@ -483,7 +551,7 @@ def fig8_cross_group_bridges(G_full, ntype_map, sent_map, edges_df):
     ax1.bar(x - width/2, pro_int,  width, label="Pro-AI interactions",  color=C_PROAI)
     ax1.bar(x + width/2, anti_int, width, label="Anti-AI interactions", color=C_ANTIAI)
     ax1.set_ylabel("No. of Interactions")
-    ax1.set_title("Fig 8: Cross-Group Bridge Users — Interactions & Sentiment",
+    ax1.set_title("Fig 8: Cross-Group Bridge Users: Interactions & Sentiment",
                   fontweight="bold", pad=12)
     ax1.legend(framealpha=0.9)
     ax1.set_axisbelow(True)
@@ -508,7 +576,7 @@ def fig8_cross_group_bridges(G_full, ntype_map, sent_map, edges_df):
     ax2.legend(handles=sent_patches, loc="lower right", framealpha=0.9, fontsize=8)
 
     plt.tight_layout()
-    out = OUTPUT_DIR / "van_fig8_cross_group_bridges.png"
+    out = OUTPUT_DIR / "fig8_cross_group_bridges.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
