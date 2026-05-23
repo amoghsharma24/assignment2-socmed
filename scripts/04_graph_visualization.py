@@ -132,20 +132,20 @@ def sentiment_map(comments_df):
 
 def fig1_global_topology(G_proai, G_anti):
     print("→ Fig 1: Global Topology …")
- 
+
     s_pro  = graph_stats(G_proai)
     s_anti = graph_stats(G_anti)
- 
+
     large_metrics = ["Nodes", "Edges", "Largest Component"]
     small_metrics = ["Density (×10⁻³)", "Avg Degree", "Max Degree", "Components"]
- 
-    fig = plt.figure(figsize=(14, 7))
+
+    fig = plt.figure(figsize=(14, 8))
     from matplotlib.gridspec import GridSpec
-    gs = GridSpec(2, 2, figure=fig, height_ratios=[3, 1], hspace=0.55, wspace=0.35)
+    gs = GridSpec(2, 2, figure=fig, height_ratios=[3, 1.2], hspace=0.6, wspace=0.35)
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1])
-    ax3 = fig.add_subplot(gs[1, :])   # full width info panel
- 
+    ax3 = fig.add_subplot(gs[1, :])
+
     for ax, metrics in [(ax1, large_metrics), (ax2, small_metrics)]:
         x     = np.arange(len(metrics))
         width = 0.35
@@ -163,23 +163,23 @@ def fig1_global_topology(G_proai, G_anti):
         ax.set_ylabel("Value")
         ax.legend(framealpha=0.9, fontsize=8)
         ax.set_axisbelow(True)
- 
+
     # network construction metadata panel
     ax3.axis("off")
     info_lines = [
         ("Nodes",  "YouTube users who posted or received at least one reply"),
-        ("Edges",  "Directed reply interactions  (User A replied to User B)"),
+        ("Edges",  "Directed reply interactions (User A replied to User B)"),
         ("Type",   "Directed (DiGraph): reply direction is meaningful for information flow analysis"),
         ("Weight", "Unweighted: edge presence captures interaction structure; frequency not required for topology"),
         ("Filter", "Thread level balanced sampling, isolated nodes retained, no degree threshold applied"),
-        ("Data",   f"From : network_edges_balanced.csv , {s_pro['Edges']+s_anti['Edges']:,} total edges  , {s_pro['Nodes']+s_anti['Nodes']:,} unique users across both subgraphs"),
+        ("Data",   f"From: network_edges_balanced.csv,  {s_pro['Edges']+s_anti['Edges']:,} total edges,  {s_pro['Nodes']+s_anti['Nodes']:,} unique users across both subgraphs"),
     ]
-    col_x = [0.01, 0.11]
-    row_y = np.linspace(0.82, 0.08, len(info_lines))
- 
+    col_x = [0.01, 0.10]
+    row_y = np.linspace(0.75, 0.05, len(info_lines))
+
     ax3.add_patch(plt.Rectangle((0, 0), 1, 1, transform=ax3.transAxes,
                                  facecolor="#f4f7fb", zorder=0))
-    ax3.text(0.5, 0.96, "Network Construction Summary",
+    ax3.text(0.5, 0.93, "Network Construction Summary",
              ha="center", va="top", fontsize=9, fontweight="bold",
              transform=ax3.transAxes, color="#2E4057")
     for (label, desc), y in zip(info_lines, row_y):
@@ -187,14 +187,13 @@ def fig1_global_topology(G_proai, G_anti):
                  transform=ax3.transAxes, color="#333", va="center")
         ax3.text(col_x[1], y, desc, fontsize=8,
                  transform=ax3.transAxes, color="#555", va="center")
- 
+
     fig.suptitle("Fig 1: Global Network Topology: Pro-AI vs Anti-AI",
                  fontweight="bold", fontsize=13, y=0.99)
     out = OUTPUT_DIR / "fig1_global_topology.png"
     plt.savefig(out, bbox_inches="tight")
     plt.close()
     print(f"   Saved {out.name}")
-    
 # degree distribution plots (log-log) for both subgraphs, with power-law fit lines
 
 def fig2_degree_distribution(G_proai, G_anti):
